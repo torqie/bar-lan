@@ -1,0 +1,25 @@
+name: Test and build
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.1'
+      - run: go test -race ./...
+      - run: go vet ./...
+      - if: runner.os == 'Windows'
+        run: |
+          go build -ldflags "-H windowsgui" -o dist/bar-lan.exe ./cmd/bar-lan
+          go build -o dist/bar-lan-cli.exe ./cmd/bar-lan
+      - if: runner.os != 'Windows'
+        run: go build -o dist/bar-lan ./cmd/bar-lan
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bar-lan-${{ matrix.os }}
+          path: dist/
