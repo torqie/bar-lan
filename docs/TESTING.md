@@ -30,3 +30,7 @@ Attach redacted relevant infolog excerpts for failures. Do not attach API keys o
 ## v0.2 update — 2026-09-12
 
 Local race tests and Windows cross-build/static checks passed for automatic engine ordering, guest names and slot leases, compatibility/start gates, real UDP room exchange, and RGB565 minimap conversion. A native Windows CI control/navigation smoke check was added; record its hosted outcome separately. Actual unitsync against the users' BAR install, preview rendering, and a real two-PC match are still pending.
+
+## Hosted Windows controls — passed 2026-09-12
+
+[Run 34718014787](https://github.com/torqie/bar-lan/actions/runs/34718014787) passed Windows/Linux tests and builds plus Windows welcome/Host/Join control navigation. This supersedes the earlier pending status for those specific control checks. It does not establish visual/DPI quality, real unitsync content, previews, or a BAR match. See WINDOWS_HANDOFF.md at the repository root for the Windows continuation plan.
