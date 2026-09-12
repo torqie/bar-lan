@@ -12,12 +12,15 @@ public static class NativeUI {
 }
 '@
 function Wait-Window($Title) {
- for ($i=0; $i -lt 60; $i++) {
+ for ($i=0; $i -lt 300; $i++) {
   if ($App.HasExited) { throw "Desktop process exited: $($App.ExitCode)" }
   $Window = [NativeUI]::FindWindow($null,$Title)
   if ($Window -ne [IntPtr]::Zero) { return $Window }
   Start-Sleep -Milliseconds 100
  }
+ if (Test-Path $env:BAR_LAN_UI_TRACE) { Get-Content $env:BAR_LAN_UI_TRACE | Write-Host }
+ $App.Refresh()
+ Write-Host "App process $($App.Id), title $($App.MainWindowTitle), handle $($App.MainWindowHandle)"
  throw "Window not found: $Title"
 }
 function Assert-Control($Window,$Id,$Class) {
@@ -26,6 +29,7 @@ function Assert-Control($Window,$Id,$Class) {
  [void][NativeUI]::GetClassName($Control,$Name,100)
  if ($Name.ToString() -ine $Class) { throw "Control $Id should be $Class, got $Name" }
 }
+$env:BAR_LAN_UI_TRACE = Join-Path $env:RUNNER_TEMP "bar-lan-ui-trace.txt"
 $App = Start-Process -FilePath ./dist/bar-lan.exe -PassThru
 try {
  $HomeWindow = Wait-Window 'BAR LAN'

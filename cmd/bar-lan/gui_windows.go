@@ -555,7 +555,17 @@ func (d *desktop) tick() {
 	enabled(d.controls[mapID], !v.Active)
 	enabled(d.controls[leaveID], v.Active || running)
 }
+func uiTrace(stage string) {
+	if p := os.Getenv("BAR_LAN_UI_TRACE"); p != "" {
+		f, e := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+		if e == nil {
+			fmt.Fprintln(f, stage)
+			f.Close()
+		}
+	}
+}
 func serveGUI(ctx context.Context) error {
+	uiTrace("desktop entry")
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	d := &desktop{ctx: ctx, controls: map[int]uintptr{}}
@@ -575,6 +585,7 @@ func serveGUI(ctx context.Context) error {
 		d.data = data
 		d.engine = engine
 	}
+	uiTrace("installation resolved")
 	d.instance, _, _ = syscall.NewLazyDLL("kernel32.dll").NewProc("GetModuleHandleW").Call(0)
 	cursor, _, _ := user32.NewProc("LoadCursorW").Call(0, 32512)
 	callback := syscall.NewCallback(func(hwnd uintptr, msg uint32, w, l uintptr) uintptr {
@@ -617,6 +628,7 @@ func serveGUI(ctx context.Context) error {
 		v, _, _ := user32.NewProc("DefWindowProcW").Call(hwnd, uintptr(msg), w, l)
 		return v
 	})
+	uiTrace("registering window class")
 	d.class = wide("BarLanDesktopV2")
 	wc := windowClass{Proc: callback, Instance: d.instance, Cursor: cursor, Background: 16, Name: d.class}
 	if v, _, err := user32.NewProc("RegisterClassW").Call(uintptr(unsafe.Pointer(&wc))); v == 0 {
@@ -624,14 +636,18 @@ func serveGUI(ctx context.Context) error {
 	}
 	defer user32.NewProc("UnregisterClassW").Call(uintptr(unsafe.Pointer(d.class)), d.instance)
 	d.font, _, _ = syscall.NewLazyDLL("gdi32.dll").NewProc("GetStockObject").Call(17)
+	uiTrace("creating welcome window")
 	var err error
 	d.home, _, err = createWindow.Call(0x10000, uintptr(unsafe.Pointer(d.class)), uintptr(unsafe.Pointer(wide("BAR LAN"))), 0x00c80000, 0x80000000, 0x80000000, 800, 510, 0, 0, d.instance, 0)
 	if d.home == 0 {
 		return err
 	}
+	uiTrace(fmt.Sprintf("welcome handle %d", d.home))
 	d.window = d.home
 	d.homeSetup()
+	uiTrace("welcome controls created")
 	user32.NewProc("ShowWindow").Call(d.home, 1)
+	uiTrace("entering message loop")
 	var m windowMessage
 	for {
 		v, _, err := user32.NewProc("GetMessageW").Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
