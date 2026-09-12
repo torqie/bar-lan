@@ -4,7 +4,7 @@ using System;
 using System.Text;
 using System.Runtime.InteropServices;
 public static class NativeUI {
- [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string cls,string title);
+ [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(IntPtr cls,string title);
  [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr parent,int id);
  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr hwnd,uint msg,IntPtr w,IntPtr l);
  [DllImport("user32.dll", CharSet=CharSet.Unicode, EntryPoint="SendMessageW")] public static extern IntPtr SetText(IntPtr hwnd,uint msg,IntPtr w,string text);
@@ -14,7 +14,7 @@ public static class NativeUI {
 function Wait-Window($Title) {
  for ($i=0; $i -lt 300; $i++) {
   if ($App.HasExited) { throw "Desktop process exited: $($App.ExitCode)" }
-  $Window = [NativeUI]::FindWindow($null,$Title)
+  $Window = [NativeUI]::FindWindow([IntPtr]::Zero,$Title)
   if ($Window -ne [IntPtr]::Zero) { return $Window }
   Start-Sleep -Milliseconds 100
  }
