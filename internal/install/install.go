@@ -6,7 +6,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
+	"strings"
 )
 
 type Installation struct {
@@ -40,7 +43,7 @@ func Engines(data string) []string {
 		matches, _ := filepath.Glob(filepath.Join(data, "engine", "*", name))
 		result = append(result, matches...)
 	}
-	sort.Strings(result)
+	sort.Slice(result, func(i, j int) bool { return Newer(Version(result[i]), Version(result[j])) })
 	return result
 }
 func Resolve(data, engine string) (string, string, error) {
@@ -64,8 +67,8 @@ func Resolve(data, engine string) (string, string, error) {
 	}
 	if engine == "" {
 		found := Engines(data)
-		if len(found) != 1 {
-			return "", "", fmt.Errorf("found %d engines; select --engine explicitly (see detect)", len(found))
+		if len(found) == 0 {
+			return "", "", fmt.Errorf("no engine installed; open BAR to download it first")
 		}
 		engine = found[0]
 	}
@@ -93,4 +96,25 @@ func Hash(path string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+func Version(engine string) string { return filepath.Base(filepath.Dir(engine)) }
+
+var versionParts = regexp.MustCompile(`[0-9]+|[^0-9]+`)
+
+// Newer compares numeric build components naturally: build 100 is newer than 99.
+func Newer(a, b string) bool {
+	aa, bb := versionParts.FindAllString(strings.ToLower(a), -1), versionParts.FindAllString(strings.ToLower(b), -1)
+	for i := 0; i < len(aa) && i < len(bb); i++ {
+		if aa[i] == bb[i] {
+			continue
+		}
+		an, ae := strconv.ParseUint(aa[i], 10, 64)
+		bn, be := strconv.ParseUint(bb[i], 10, 64)
+		if ae == nil && be == nil {
+			return an > bn
+		}
+		return aa[i] > bb[i]
+	}
+	return len(aa) > len(bb)
 }

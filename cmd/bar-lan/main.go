@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/torqie/bar-lan/internal/content"
 	"github.com/torqie/bar-lan/internal/install"
 	"github.com/torqie/bar-lan/internal/lan"
 	"github.com/torqie/bar-lan/internal/recoil"
@@ -28,6 +29,9 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+type engineStartedKey struct{}
+
 func run(ctx context.Context, args []string) error { return runWithOutput(ctx, args, os.Stdout) }
 
 // Serialize engine output and companion status writes for all output sinks.
@@ -43,6 +47,9 @@ func (w *lockedWriter) Write(p []byte) (int, error) {
 }
 func runWithOutput(ctx context.Context, args []string, output io.Writer) error {
 	output = &lockedWriter{writer: output}
+	if len(args) > 0 && args[0] == "content-worker" {
+		return content.Worker(args[1:])
+	}
 	if len(args) == 0 || args[0] == "gui" {
 		return serveGUI(ctx)
 	}
@@ -62,6 +69,7 @@ func runWithOutput(ctx context.Context, args []string, output io.Writer) error {
 	game := f.String("game", "", "exact installed game name/archive; pin same version on both PCs")
 	mapName := f.String("map", "", "exact installed map name, including .smf")
 	hostIP := f.String("host", "", "host IP; skips discovery for join")
+	advertise := f.Bool("advertise", true, "advertise legacy CLI host (desktop room owns discovery separately)")
 	dry := f.Bool("dry-run", false, "print start script and launch arguments without launching")
 	if err := f.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -161,7 +169,7 @@ func runWithOutput(ctx context.Context, args []string, output io.Writer) error {
 	}
 	// Bind before launching so a discovery port conflict fails without spawning a game.
 	var listener *net.UDPConn
-	if command == "host" {
+	if command == "host" && *advertise {
 		listener, err = lan.Listen("0.0.0.0")
 		if err != nil {
 			return fmt.Errorf("discovery UDP %d: %w", lan.Port, err)
@@ -188,6 +196,9 @@ func runWithOutput(ctx context.Context, args []string, output io.Writer) error {
 	cmd.Stderr = output
 	if err = cmd.Start(); err != nil {
 		return err
+	}
+	if started, ok := ctx.Value(engineStartedKey{}).(func()); ok {
+		started()
 	}
 	advertiseCtx, stop := context.WithCancel(ctx)
 	defer stop()

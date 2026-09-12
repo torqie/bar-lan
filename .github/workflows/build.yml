@@ -19,6 +19,8 @@ jobs:
           go build -o dist/bar-lan-cli.exe ./cmd/bar-lan
       - if: runner.os != 'Windows'
         run: go build -o dist/bar-lan ./cmd/bar-lan
+      - if: runner.os == 'Windows'
+        run: ./scripts/windows-ui-smoke.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: bar-lan-${{ matrix.os }}

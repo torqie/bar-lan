@@ -6,9 +6,9 @@ Delivered: native Windows desktop GUI plus Go CLI, explicit/heuristic installati
 
 Acceptance still required: two Windows PCs enter and play the same match for five minutes, repeat with manual IP and WAN disconnected, record engine/game/map versions and errors. Fixed roster, 1v1 only. Engine startup is not readiness. Content discovery and download are manual. These constraints keep the first proof focused.
 
-## 2 — Reliable local session setup
+## 2 — Friendly local session setup (v0.2 implemented; acceptance pending)
 
-After the first match works: add installed content inventory through a verified engine/unitsync interface, game/map fingerprints, ready/registration handshake, engine readiness/errors, multi-NIC selection, explicit host lifetime/state, player slots and team selection. Refine the native GUI after Windows usability testing; add persisted local preferences and content selection. Keep direct IP fallback. Pin supported Recoil builds using acceptance-test evidence.
+Implemented by user request: welcome screen with separate Host/Join windows, automatic newest installed engine, unitsync content dropdowns and minimap previews, guest-chosen names, compatibility fingerprints, pre-game registration/heartbeat, coordinated launch and saved name/data folder. Still pending: installed-BAR acceptance, small-screen/DPI polish, engine socket readiness rather than process-start plus delay, multi-NIC selection and team customization. Pin supported Recoil builds using acceptance evidence.
 
 ## 3 — HumanAI local bridge, no LLM yet
 

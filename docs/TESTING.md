@@ -26,3 +26,7 @@ Record after following the README:
 | Wrong name / mismatched engine / missing map errors | Pending |
 
 Attach redacted relevant infolog excerpts for failures. Do not attach API keys or full private lobby scripts.
+
+## v0.2 update — 2026-09-12
+
+Local race tests and Windows cross-build/static checks passed for automatic engine ordering, guest names and slot leases, compatibility/start gates, real UDP room exchange, and RGB565 minimap conversion. A native Windows CI control/navigation smoke check was added; record its hosted outcome separately. Actual unitsync against the users' BAR install, preview rendering, and a real two-PC match are still pending.

@@ -11,16 +11,17 @@ import (
 )
 
 type gameRequest struct {
-	Mode   string `json:"mode"`
-	Data   string `json:"data"`
-	Engine string `json:"engine"`
-	Name   string `json:"name"`
-	Guest  string `json:"guest"`
-	Game   string `json:"game"`
-	Map    string `json:"map"`
-	Host   string `json:"host"`
-	Target string `json:"target"`
-	Port   int    `json:"port"`
+	RoomLaunch bool
+	Mode       string `json:"mode"`
+	Data       string `json:"data"`
+	Engine     string `json:"engine"`
+	Name       string `json:"name"`
+	Guest      string `json:"guest"`
+	Game       string `json:"game"`
+	Map        string `json:"map"`
+	Host       string `json:"host"`
+	Target     string `json:"target"`
+	Port       int    `json:"port"`
 }
 
 func (r gameRequest) arguments() ([]string, error) {
@@ -36,6 +37,9 @@ func (r gameRequest) arguments() ([]string, error) {
 		}
 		if _, err := recoil.Host(r.Port, r.Name, r.Guest, r.Game, r.Map); err != nil {
 			return nil, err
+		}
+		if r.RoomLaunch {
+			a = append(a, "--advertise=false")
 		}
 		a = append(a, "--name", r.Name, "--guest", r.Guest, "--game", r.Game, "--map", r.Map, "--port", fmt.Sprint(r.Port))
 	case "join":
@@ -62,6 +66,7 @@ func (r gameRequest) arguments() ([]string, error) {
 type guiState struct {
 	mu      sync.Mutex
 	cancel  context.CancelFunc
+	Started bool
 	Running bool   `json:"running"`
 	Status  string `json:"status"`
 	Log     string `json:"log"`
@@ -97,6 +102,8 @@ func (s *guiState) start(ctx context.Context, r gameRequest) error {
 	gameCtx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
 	s.Running = true
+	s.Started = false
+	gameCtx = context.WithValue(gameCtx, engineStartedKey{}, func() { s.mu.Lock(); s.Started = true; s.mu.Unlock() })
 	s.Status = "Starting Recoil"
 	s.Log = ""
 	go func() {

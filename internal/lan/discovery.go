@@ -15,21 +15,38 @@ const Port = 8453
 const Query = "bar-lan/discover/1"
 
 type Session struct {
-	Version      int    `json:"version"`
-	IP           string `json:"-"`
-	Port         int    `json:"port"`
-	Host         string `json:"host"`
-	Guest        string `json:"guest"`
-	Game         string `json:"game"`
-	Map          string `json:"map"`
-	EngineSHA256 string `json:"engine_sha256"`
+	Version       int    `json:"version"`
+	IP            string `json:"-"`
+	Port          int    `json:"port"`
+	Host          string `json:"host"`
+	Guest         string `json:"guest"`
+	Game          string `json:"game"`
+	Map           string `json:"map"`
+	EngineSHA256  string `json:"engine_sha256"`
+	EngineVersion string `json:"engine_version,omitempty"`
+	RoomID        string `json:"room_id,omitempty"`
+	Phase         string `json:"phase,omitempty"`
+	GameChecksum  uint32 `json:"game_checksum,omitempty"`
+	MapChecksum   uint32 `json:"map_checksum,omitempty"`
 }
 
 func (s Session) Validate() error {
-	if s.Version != 1 || s.Port < 1 || s.Port > 65535 || len(s.EngineSHA256) != 64 {
+	if (s.Version != 1 && s.Version != 2) || s.Port < 1 || s.Port > 65535 || len(s.EngineSHA256) != 64 {
 		return fmt.Errorf("invalid advertisement")
 	}
-	_, err := recoil.Host(s.Port, s.Host, s.Guest, s.Game, s.Map)
+	guest := s.Guest
+	if s.Version == 2 {
+		if len(s.RoomID) != 32 || s.GameChecksum == 0 || s.MapChecksum == 0 {
+			return fmt.Errorf("invalid room metadata")
+		}
+		if s.Phase != "waiting" && s.Phase != "starting" && s.Phase != "launch" {
+			return fmt.Errorf("invalid room state")
+		}
+		if guest == "" {
+			guest = s.Host + "_guest"
+		}
+	}
+	_, err := recoil.Host(s.Port, s.Host, guest, s.Game, s.Map)
 	return err
 }
 func Listen(bind string) (*net.UDPConn, error) {

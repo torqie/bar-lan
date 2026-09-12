@@ -1,135 +1,109 @@
-# BAR LAN prototype
+# BAR LAN
 
-A small, dependency-free Go companion for **two Windows PCs with BAR already installed**. It launches the installed Recoil engine directly, without logging into or contacting the public BAR lobby. It does not download or bundle BAR, its assets, or Recoil.
+A native Windows companion for playing Beyond All Reason together on a local network. No public lobby login, browser, or API key is required. BAR and its content must already be installed.
 
-**Status:** initial prototype. Script generation and LAN discovery have automated tests; a real Windows-to-Windows BAR match remains the acceptance gate. This is a fixed two-player 1v1 (Armada vs Cortex, map-defined starting positions), not a full lobby. Host reserves the guest name before launching. No HumanAI/provider calls are implemented.
+## Get the app
 
-## Build
+Download the Windows ZIP from [Releases](https://github.com/torqie/bar-lan/releases), extract it on **both PCs**, and double-click **bar-lan.exe**. Use the same BAR LAN release on both PCs; v0.2 rooms are incompatible with the original v0.1 desktop workflow.
 
-Install Go 1.24 or newer, then in PowerShell:
+## Play together
+
+1. Enter **your name** on the welcome screen. The app remembers it and your BAR data folder.
+2. The newest installed engine build is selected automatically. Its version is displayed. **Installation settings** lets you change the detected folder or choose another installed engine if needed.
+3. On PC A, choose **Host Game**. In the separate host window, choose an installed **game** and **map** from dropdowns. The latest BAR game is the default. A minimap preview appears when the map supports it.
+4. Click **Open room**. The host waits without launching Recoil yet.
+5. On PC B, enter that person's own name, choose **Join Game**, and select the discovered room. The app shows the host, engine build, game, and map, including a preview when locally available. Click **Join selected room**.
+6. BAR LAN compares the engine executable and game/map checksums. Both windows show that versions match; the host sees the guest's chosen name. Only then does **Start game together** become available on PC A.
+7. The host starts the game. Both PCs launch Recoil automatically. Follow its in-game ready/start controls. Exit Recoil normally, or use **Leave room / stop game** to terminate it.
+
+Both players need distinct names. A guest who leaves or loses contact releases the waiting-room slot after at most ten seconds. The host chooses a fixed two-player 1v1 with map-defined starting positions; team customization and AI are future work.
+
+### Finding content
+
+Games, maps, checksums, and previews are read from **unitsync.dll supplied with the selected Recoil engine**. This understands BAR's installed archives and rapid packages; archive filenames do not need to be entered manually. Scanning runs in a separate process, with a timeout, so a DLL failure does not crash the window. Content operations are serialized within the app.
+
+If lists are empty or content cannot be read, open BAR once and download/play a local skirmish with the desired game and map, then close BAR and return to BAR LAN. Check that `unitsync.dll` is beside the selected engine executable. Use a matching 64-bit Windows engine. Content is never downloaded by this app. A missing preview does not prevent hosting an otherwise valid map.
+
+The default engine is selected by natural comparison of its installation directory's version/build numbers (for example build 100 comes after 99), not file modification time. If two PCs have different newest builds, update BAR on both or choose the same installed build under Installation settings. A matching folder label is only preliminary; joining verifies the actual executable hash and content checksums.
+
+## Network and firewall
+
+Use a trusted home LAN and a **Private** Windows network profile. No router port forwarding is needed.
+
+| Traffic on host PC | Port | Purpose |
+| --- | --- | --- |
+| BAR LAN | UDP 8453 | Discovery, guest registration, heartbeat and launch signal |
+| Recoil engine | UDP 8452 | Actual game traffic |
+
+Allow BAR LAN and Recoil when Windows asks about Private-network access. Both PCs require outbound UDP and replies to their OS-selected source ports. Discovery and room control use the same port; there is no HTTP server or TCP listener.
+
+If discovery fails, replace the discovery target in Join Game with PC A's IPv4 address from `ipconfig`, then click **Find games**. A subnet broadcast can also be used. VPNs, guest Wi-Fi/client isolation and separate VLANs can block LAN communication.
+
+Optional host-side rules, from an elevated PowerShell with your actual executable paths:
 
 ```powershell
-git clone git@github.com:torqie/bar-lan.git
-cd bar-lan
-go test ./...
+$BarCompanion = 'C:\Tools\bar-lan.exe'
+$BarEngine = 'C:\YOUR-BAR-DATA\engine\YOUR-BUILD\spring.exe'
+New-NetFirewallRule -DisplayName 'BAR LAN room' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 8453 -Program $BarCompanion -Profile Private -RemoteAddress LocalSubnet
+New-NetFirewallRule -DisplayName 'BAR LAN game' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 8452 -Program $BarEngine -Profile Private -RemoteAddress LocalSubnet
+```
+
+Update the engine rule when its path changes. Remove these rules with `Remove-NetFirewallRule -DisplayName 'BAR LAN room'` and `Remove-NetFirewallRule -DisplayName 'BAR LAN game'`. The waiting-room token prevents accidental slot reuse; this remains an unencrypted trusted-LAN protocol, not Internet authentication.
+
+## Build and diagnostics
+
+Go 1.24 or newer, on Windows:
+
+```powershell
+go test -race ./...
+go vet ./...
 go build -ldflags "-H windowsgui" -o dist/bar-lan.exe ./cmd/bar-lan
 go build -o dist/bar-lan-cli.exe ./cmd/bar-lan
 ```
 
-Copy `dist/bar-lan.exe` to both PCs and double-click it to open the native Windows app. Copy `dist/bar-lan-cli.exe` too if you want command-line diagnostics. No Go installation is needed to run the executable. GitHub Actions also builds Windows artifacts when enabled for this repository.
-
-## Desktop app
-
-Double-click **bar-lan.exe**. This is a native Windows window built with standard Windows controls; it needs no browser, local web server, WebView, or additional GUI runtime.
-
-1. Choose the detected BAR data folder, or paste your custom data path and click **Detect / refresh**. Select the engine executable from the dropdown (or paste its full path). Multiple engines require an explicit choice.
-2. On PC A, fill in the host/guest names and exact installed game/map values described below, then click **Host game**.
-3. On PC B, choose its local install/engine, click **Find games**, select PC A and click **Join selected game**. The companion checks the engine hash and uses the reserved guest name.
-4. If discovery fails, enter PC A's IP as the discovery target, or enter its IP and the reserved name under **Join by IP**. Manual joining uses the game port field and skips engine hash verification.
-5. Launch errors and engine output appear in the log. Readiness and match start happen in Recoil. Exit Recoil normally, or click **Stop game** to terminate it. Close BAR LAN after the game stops.
-
-The window remains responsive during discovery and gameplay. Current limits: fixed desktop layout, no saved preferences, no content picker/download, and no visual Windows QA performed yet. Keyboard Tab navigation uses standard controls. The command examples below use the separate CLI build.
-
-## Prepare both PCs
-
-1. Use BAR normally once to download **the same engine build, exact game version, and map** on both PCs. Launch that map in a local skirmish on each PC to confirm content is present. Then exit BAR and its launcher. BAR being installed alone does not guarantee map/game content is cached.
-2. Identify the BAR **data** folder and engine executable:
-
-   ```powershell
-   .\bar-lan-cli.exe detect
-   .\bar-lan-cli.exe detect --data 'D:\Games\Beyond-All-Reason\data'
-   ```
-
-   Common installs are under `%LOCALAPPDATA%\Programs\Beyond-All-Reason\data` or `%ProgramFiles%\Beyond-All-Reason\data`. Portable/custom installs need `--data`. `BAR_DATA_DIR` is also supported. Detection lists engine candidates; if several exist, select one explicitly rather than assuming the newest folder is correct.
-3. Get the **exact `GameType` and `MapName`** from the `[GAME]` section of the start script produced by that working BAR skirmish (commonly `script.txt` in the data directory; launch logs may identify a different script path). Copy only those values, without their trailing semicolons. Keep any private information in the original script local. Use a pinned game name/version or archive name, not a moving rapid tag. Map names include `.smf`. Both PCs must have matching content; this prototype does not inventory archives or calculate game/map checksums. Recoil performs the actual content/sync checks.
-4. Set PowerShell variables on each PC (replace these example paths):
-
-   ```powershell
-   $BarData = 'C:\Users\YOU\AppData\Local\Programs\Beyond-All-Reason\data'
-   $BarEngine = Join-Path $BarData 'engine\YOUR-ENGINE-BUILD\spring.exe'
-   ```
-
-## Host on PC A
-
-Replace game/map placeholders with the values from the working local skirmish:
+The desktop app has no additional GUI runtime dependencies. Source builds need no third-party Go packages. CI tests Linux and Windows and checks the native welcome/host/join windows and their controls on Windows. The optional CLI is useful for diagnostics:
 
 ```powershell
-.\bar-lan-cli.exe host --data $BarData --engine $BarEngine --name Alice --guest Bob --game 'EXACT GAME NAME AND VERSION' --map 'EXACT MAP NAME.smf' --dry-run
-.\bar-lan-cli.exe host --data $BarData --engine $BarEngine --name Alice --guest Bob --game 'EXACT GAME NAME AND VERSION' --map 'EXACT MAP NAME.smf'
-```
-
-The first command previews the start script without launching or opening a listener. The second starts Recoil and discovery. Keep the terminal open. Recoil waits for the reserved player `Bob`; follow the in-game ready/start controls after both players connect. Avoid forcing a start before the guest connects.
-
-## Discover and join on PC B
-
-```powershell
+.\bar-lan-cli.exe detect
 .\bar-lan-cli.exe discover
-.\bar-lan-cli.exe join --data $BarData --engine $BarEngine
-```
-
-With exactly one discovered host, `join` uses the reserved guest name and compares SHA-256 hashes of the engine executables. It prints the host's game and map requirements. No executable paths or scripts received from the network are run. Hash matching checks the executable only, not accompanying DLLs/content.
-
-If there are multiple hosts, or broadcast fails, find PC A's IPv4 address with `ipconfig` and use directed discovery:
-
-```powershell
 .\bar-lan-cli.exe discover --target 192.168.1.20
-.\bar-lan-cli.exe join --target 192.168.1.20 --data $BarData --engine $BarEngine
 ```
 
-`--target` also accepts a subnet broadcast address such as `192.168.1.255` when appropriate for your subnet. VPNs and multiple network adapters can route the default broadcast incorrectly. The protocol is IPv4 UDP request/reply, with a three-second default discovery window (`--timeout 5s`).
+Custom/portable data folders can be supplied with `BAR_DATA_DIR` or Installation settings. Settings are stored in the user's application configuration directory under `bar-lan/settings.json` and contain only player name and data folder. The app does not handle API keys yet.
 
-Manual joining works even with discovery blocked:
+The original direct-launch CLI remains available for troubleshooting. It requires the guest name to be reserved in advance and uses exact game/map values; the **desktop waiting-room workflow removes those requirements from the user interface**:
 
 ```powershell
-.\bar-lan-cli.exe join --host 192.168.1.20 --port 8452 --name Bob --data $BarData --engine $BarEngine
+.\bar-lan-cli.exe host --data 'D:\BAR\data' --name Alice --guest Bob --game 'EXACT GAME NAME' --map 'EXACT MAP NAME' --dry-run
+.\bar-lan-cli.exe join --data 'D:\BAR\data' --host 192.168.1.20 --name Bob
 ```
 
-Manual joining skips the engine hash comparison and requires the exact guest name reserved by PC A. Verify versions yourself. Host and manual join must both use the same `--port` if changed. One advertised host per PC is supported (fixed discovery port 8453). Advertisements last until the Recoil process exits, including during a match; they do not mean a fresh player slot is available. Joining after match start is outside this milestone.
+Remove `--dry-run` from the host command to launch. `--engine` can override automatic latest selection. Manual CLI joining skips the GUI's compatibility checks. Use the desktop to join v0.2 waiting rooms.
 
-## Windows firewall and network
+## Acceptance test and limitations
 
-Use a trusted home LAN with the Windows network profile set to **Private**. No router port forwarding, Internet lobby account, or API key is required for this launch flow. Initial BAR content downloads may require Internet access.
+The two-PC BAR match is still the acceptance gate. Automated checks validate protocol behavior, process handling and native controls; they do not prove the installed BAR build can complete a match.
 
-| Traffic | Default | Requirement |
-| --- | --- | --- |
-| Recoil game | UDP 8452 on PC A | Allow inbound to the selected engine on host; PC B uses an OS-selected UDP source port |
-| Discovery | UDP 8453 on PC A | Allow inbound to bar-lan.exe; it replies to the client's ephemeral port |
-| Outbound | UDP | Allow companion/engine outbound and stateful replies on both PCs |
+1. Download the same app release on both PCs and confirm matching installed BAR content.
+2. Check automatic engine choice, game/map lists, and previews on the actual install.
+3. Open a room, join with another name, confirm both players and compatibility status, and start together.
+4. Play five minutes with both commanders responding and no desync.
+5. Repeat with directed discovery and with WAN disconnected while retaining LAN connectivity.
+6. Test mismatched engine/content rejection, a guest leaving, host restart, and a map without a preview.
 
-When Windows prompts, allow the applications on **Private networks**. If necessary, run these in an elevated PowerShell on PC A after defining `$BarEngine` there and replacing the companion path:
+Record outcomes in [docs/TESTING.md](docs/TESTING.md). Recoil's `infolog.txt` is in the BAR data folder; preserve relevant excerpts before another launch overwrites it. Existing BAR settings/logs/replays use that same data folder. Close the BAR launcher while using this app. The GUI uses a fixed desktop layout; small-screen/high-DPI visual testing remains pending.
 
-```powershell
-New-NetFirewallRule -DisplayName 'BAR LAN discovery' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 8453 -Program 'C:\Tools\bar-lan.exe' -Profile Private -RemoteAddress LocalSubnet
-New-NetFirewallRule -DisplayName 'BAR LAN game' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 8452 -Program $BarEngine -Profile Private -RemoteAddress LocalSubnet
-```
+## Architecture / HumanAI
 
-Update the game rule if the engine path or game port changes. Remove these optional rules with `Remove-NetFirewallRule -DisplayName 'BAR LAN discovery'` and `Remove-NetFirewallRule -DisplayName 'BAR LAN game'`. Managed firewalls may also require explicit outbound rules. Guest Wi-Fi/client isolation or separate VLANs can prevent all direct connections. Discovery is unauthenticated and intended for a trusted LAN; player names are not access-control credentials.
+`internal/room` owns pre-game registration and launch coordination; `internal/lan` owns versioned discovery; `internal/content` isolates unitsync; `internal/install` resolves engine builds; `internal/recoil` generates scripts. The native desktop and CLI share process handling. [Milestones](docs/MILESTONES.md) describe the remaining work.
 
-## Two-PC acceptance test
+HumanAI remains provider-neutral observation/strategy-plan and bridge interfaces only. Claude/Gemini BYOK adapters, local credential storage, team-visible observations and validated game commands are later milestones. Pure LAN play remains independent of AI or Internet access.
 
-1. Complete the local skirmish/content checks on both PCs. Record engine folder, game version, map, and the two LAN IPs.
-2. Preview host/client scripts with `--dry-run`; ensure names, IP, port and content match.
-3. Start PC A, discover it on PC B, then join before starting gameplay. Confirm both players reach the same map, have their own commanders, can issue orders, and see each other's movement. Play at least five minutes without a desync.
-4. Repeat using manual `--host` joining. For an offline check, disconnect the WAN while preserving the LAN after all content has been downloaded, then repeat.
-5. Exit Recoil and check that discovery stops. Reopen the host and repeat. Ctrl+C terminates the launched engine; exit through Recoil for normal cleanup.
-6. Check wrong-name/manual join rejection, mismatched-engine discovery rejection, and a missing-map failure. Record actual results in `docs/TESTING.md`.
+## Primary references
 
-On failure, preserve the command (without secrets) and the end of `data\infolog.txt` before launching BAR again; it can be overwritten. A temporary start script is removed when the companion exits normally. Logs/settings/replays still go to your existing BAR data folder. Do not run the launcher and this companion concurrently against the same data directory.
+- [Recoil start scripts](https://github.com/beyond-all-reason/RecoilEngine/blob/BAR105/doc/StartScriptFormat.txt)
+- [Unitsync API](https://github.com/beyond-all-reason/RecoilEngine/blob/master/tools/unitsync/unitsync_api.h): installed names, checksums and RGB565 minimaps.
+- [Recoil data-directory selection](https://github.com/beyond-all-reason/RecoilEngine/blob/master/rts/System/FileSystem/DataDirLocater.cpp): isolated helper environment.
+- [BAR launcher paths](https://github.com/beyond-all-reason/spring-launcher/blob/master/src/write_path.js)
 
-**Troubleshooting:** no discovery → try directed discovery/manual IP and firewall checks; unauthorized player → use the reserved guest name exactly; missing archive/map or sync error → run the identical game/map locally on both PCs and align versions; multiple engine candidates → explicitly select `--engine`; UDP bind error → close another host process. Discovery starts when the engine process starts, not when it is fully loaded, so wait for PC A's loading screen to finish if an early join fails.
-
-## Architecture and next milestones
-
-`cmd/bar-lan` handles CLI/process lifetime; `internal/lan` owns versioned discovery; `internal/recoil` generates validated TDF scripts; `internal/install` resolves local paths. The only runtime dependency is the locally installed engine. Processes are launched with separate arguments, without a shell. There is no HTTP server, public lobby connection, or provider SDK.
-
-See [milestones](docs/MILESTONES.md) and [test record](docs/TESTING.md). `internal/humanai` contains only a provider-neutral observation/strategy-plan contract and bridge/provider interfaces. Claude and Gemini are the first planned adapters, with local BYOK configuration later. There is no secret handling or AI game control yet.
-
-## Upstream references
-
-Implementation checked against these primary sources on 2026-09-12; actual compatibility must still be established against the users' installed build:
-
-- [Recoil start-script format](https://github.com/beyond-all-reason/RecoilEngine/blob/BAR105/doc/StartScriptFormat.txt): host/client fields, reserved players, teams, and default port.
-- [BAR launcher data-path resolution](https://github.com/beyond-all-reason/spring-launcher/blob/master/src/write_path.js) and [BAR direct engine launch example](https://github.com/beyond-all-reason/BYAR-Chobby/issues/643): data directory and isolation/write-dir arguments.
-- [BAR faction definitions](https://github.com/beyond-all-reason/Beyond-All-Reason/blob/master/gamedata/sidedata.lua): Armada/Cortex side names.
-
-This is an independent companion prototype, not an official BAR release. No upstream game assets are redistributed.
+Independent companion prototype. No BAR or Recoil code/assets are bundled.
